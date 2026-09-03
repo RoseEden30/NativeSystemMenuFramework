@@ -1,0 +1,10 @@
+{
+    "name": "native-menu-framework",
+    "version-string": "1.0.0",
+    "dependencies": [
+        "spdlog",
+        "directxtk",
+        "rapidcsv",
+        "simpleini"
+    ]
+}
