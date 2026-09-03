@@ -63,30 +63,26 @@ if(DEFINED OUTPUT_FOLDER)
 
     message(STATUS "SKSE plugin output folder: ${DLL_FOLDER}")
 
-    add_custom_command(
-        TARGET "${PROJECT_NAME}"
-        POST_BUILD
+    add_custom_target(deploy_content ALL
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${DLL_FOLDER}"
+        VERBATIM
+    )
+    add_dependencies(deploy_content "${PROJECT_NAME}")
+
+    add_custom_command(
+        TARGET deploy_content
+        POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_FILE_NAME:${PROJECT_NAME}>"
         VERBATIM
     )
 
     # Crash Logger SSE reads a .pdb sitting next to the plugin.
     add_custom_command(
-        TARGET "${PROJECT_NAME}"
+        TARGET deploy_content
         POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_PDB_FILE:${PROJECT_NAME}>" "${DLL_FOLDER}/$<TARGET_PDB_FILE_NAME:${PROJECT_NAME}>"
         VERBATIM
     )
-
-    # Content rides its own target rather than the plugin's POST_BUILD, which
-    # only runs when the DLL relinks - a translation-only change never reached
-    # the game.
-    add_custom_target(deploy_content ALL
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${DLL_FOLDER}"
-        VERBATIM
-    )
-    add_dependencies(deploy_content "${PROJECT_NAME}")
 
     # Settings file, only when the project actually ships one. Only deployed
     # if missing - never overwrites settings already tweaked in game, in dev
