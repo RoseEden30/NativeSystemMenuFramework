@@ -451,18 +451,23 @@ void  SetIniSetting(const char* name, float value);
 Binds a real engine ini setting - one already sitting in Skyrim.ini or
 SkyrimPrefs.ini, but with no row in the vanilla menu - to a `getValue`/
 `onChange` pair for [`AddVanillaSetting`](#addvanillasetting). `name` is the
-setting's own name, e.g. `"fDefaultWorldFOV:Display"`.
+setting's own name, `"key:section"` as it appears in the ini file.
 
 Live only - the engine doesn't reliably write these back to disk at runtime.
 Save the value in your own ini and reapply it with `SetIniSetting` on load.
 
+Whether the engine actually reacts to a live change depends on the setting:
+some are read fresh whenever they're used, others are cached into a runtime
+field the engine only re-derives at specific moments, not on every write.
+Check in game before shipping a row - a setting in the second group needs a
+hook of your own instead, the way you'd hook anything else the engine only
+reads once.
+
 ```cpp
-constexpr float kMinFov = 60.0f, kMaxFov = 120.0f;
+float __stdcall GetMySetting() { return GetIniSetting("fMySetting:MySection"); }
+void  __stdcall SetMySetting(float v) { SetIniSetting("fMySetting:MySection", v); }
 
-float __stdcall GetFov() { return (GetIniSetting("fDefaultWorldFOV:Display") - kMinFov) / (kMaxFov - kMinFov); }
-void  __stdcall SetFov(float v) { SetIniSetting("fDefaultWorldFOV:Display", kMinFov + v * (kMaxFov - kMinFov)); }
-
-AddVanillaSetting("Display", Type::kSlider, "Field of View", &GetFov, &SetFov, 0.5f);
+AddVanillaSetting("Display", Type::kSlider, "My Setting", &GetMySetting, &SetMySetting, 0.5f);
 ```
 
 A setting name that doesn't exist logs a line and `GetIniSetting` falls back
