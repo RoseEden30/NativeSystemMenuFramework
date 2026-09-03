@@ -189,6 +189,23 @@ namespace NativeMenu
             g_originalSetSaveDisabled.callback(forwarded);
         }
 
+        // Vanilla's onCategoryButtonPress plays this itself; our entries never
+        // reach that function, so they'd otherwise click silently.
+        void PlayUiSound(RE::GFxMovie* a_movie, const char* a_sound)
+        {
+            RE::GFxValue gameDelegate;
+            if (!a_movie->GetVariable(&gameDelegate, "gfx.io.GameDelegate"))
+                return;
+
+            RE::GFxValue params;
+            a_movie->CreateArray(&params);
+            RE::GFxValue soundName(a_sound);
+            params.Invoke("push", nullptr, &soundName, 1);
+
+            const RE::GFxValue args[2] = { RE::GFxValue("PlaySound"), params };
+            gameDelegate.Invoke("call", nullptr, args, 2);
+        }
+
         std::string TextOf(RE::GFxValue& a_entry)
         {
             RE::GFxValue text;
@@ -331,6 +348,7 @@ namespace NativeMenu
                 if (evt.GetMember("entry", &entry) && entry.GetMember("__nsmf_eidx", &eidx) && eidx.IsNumber()) {
                     const int idx = static_cast<int>(eidx.GetNumber());
                     logger::debug("NativeSystemMenuFramework: itemPress on our entry {}", idx);
+                    PlayUiSound(a_params.movie, "UIMenuOK");
                     g_pendingEntry.store(idx);
                     return;
                 }
