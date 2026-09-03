@@ -1,3 +1,4 @@
+#include "IniSettings.h"
 #include "NativeMenu.h"
 #include "Pages.h"
 #include "Translations.h"
@@ -65,4 +66,19 @@ extern "C" __declspec(dllexport) bool __cdecl SetVanillaTabDescription(
     const char* a_tab, const char* a_description)
 {
     return VanillaSettings::SetTabDescription(a_tab ? a_tab : "", a_description ? a_description : "");
+}
+
+extern "C" __declspec(dllexport) float __cdecl GetIniSetting(const char* a_name)
+{
+    return IniSettings::GetFloat(a_name);
+}
+
+extern "C" __declspec(dllexport) void __cdecl SetIniSetting(const char* a_name, float a_value)
+{
+    IniSettings::SetFloat(a_name, a_value);
+}
+
+extern "C" __declspec(dllexport) bool __cdecl SaveIniSetting(const char* a_name)
+{
+    return IniSettings::SaveFloat(a_name);
 }

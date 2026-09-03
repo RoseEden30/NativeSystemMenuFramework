@@ -281,4 +281,37 @@ namespace NativeSystemMenuFramework
         const auto func = Internal::GetFunction(cache, "SetVanillaTabDescription");
         return func ? func(a_tab, a_description) : false;
     }
+
+    using GetIniSettingFunction = float (*)(const char* name);
+
+    // A real engine ini setting, e.g. "fDefaultWorldFOV:Display" - whichever
+    // of Skyrim.ini/SkyrimPrefs.ini actually holds it. 0.0f if it doesn't exist.
+    inline float GetIniSetting(const char* a_name)
+    {
+        static GetIniSettingFunction cache = nullptr;
+        const auto func = Internal::GetFunction(cache, "GetIniSetting");
+        return func ? func(a_name) : 0.0f;
+    }
+
+    using SetIniSettingFunction = void (*)(const char* name, float value);
+
+    // Live only, cheap enough for a SettingSetter. Call SaveIniSetting from
+    // SettingCommit to persist it.
+    inline void SetIniSetting(const char* a_name, float a_value)
+    {
+        static SetIniSettingFunction cache = nullptr;
+        const auto func = Internal::GetFunction(cache, "SetIniSetting");
+        if (func)
+            func(a_name, a_value);
+    }
+
+    using SaveIniSettingFunction = bool (*)(const char* name);
+
+    // Writes the setting to disk, the same way vanilla's own menu does.
+    inline bool SaveIniSetting(const char* a_name)
+    {
+        static SaveIniSettingFunction cache = nullptr;
+        const auto func = Internal::GetFunction(cache, "SaveIniSetting");
+        return func ? func(a_name) : false;
+    }
 }

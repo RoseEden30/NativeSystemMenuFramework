@@ -43,6 +43,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 | Put my mod in the Escape menu, next to Save / Quit | [`AddSystemMenuEntry`](#addsystemmenuentry)      |
 | Show text a player reads - a readme, a changelog   | [`AddSystemMenuPageItem`](#addsystemmenupageitem)|
 | Ship my text in more than one language             | [Translations](#translations)                    |
+| Expose a real ini setting the vanilla menu doesn't | [`GetIniSetting`/`SetIniSetting`/`SaveIniSetting`](#getinisetting--setinisetting--saveinisetting) |
 
 ## `IsInstalled()`
 
@@ -439,3 +440,37 @@ SetVanillaTabDescription("My Mod", "$MYMOD_TAB_DESC");
 ```
 
 Skyrim's own Gameplay, Display and Audio tabs get one from the framework.
+
+## `GetIniSetting` / `SetIniSetting` / `SaveIniSetting`
+
+```cpp
+float GetIniSetting(const char* name);
+void  SetIniSetting(const char* name, float value);
+bool  SaveIniSetting(const char* name);
+```
+
+Binds a real engine ini setting - one already sitting in Skyrim.ini or
+SkyrimPrefs.ini, but with no row in the vanilla menu - to a `getValue`/
+`onChange` pair for [`AddVanillaSetting`](#addvanillasetting), the same way
+its own rows work. `name` is the setting's own name, e.g.
+`"fDefaultWorldFOV:Display"`.
+
+`GetIniSetting`/`SetIniSetting` only touch the live value - cheap enough for
+a `SettingGetter`/`SettingSetter`, which run every tick and every drag step.
+`SaveIniSetting` writes it to disk and belongs in `onCommit` instead, exactly
+like any other expensive work there.
+
+```cpp
+constexpr float kMinFov = 60.0f, kMaxFov = 120.0f;
+
+float __stdcall GetFov() { return (GetIniSetting("fDefaultWorldFOV:Display") - kMinFov) / (kMaxFov - kMinFov); }
+void  __stdcall SetFov(float v) { SetIniSetting("fDefaultWorldFOV:Display", kMinFov + v * (kMaxFov - kMinFov)); }
+void  __stdcall CommitFov(float) { SaveIniSetting("fDefaultWorldFOV:Display"); }
+
+AddVanillaSetting("Display", Type::kSlider, "Field of View", &GetFov, &SetFov, 0.5f, {},
+    nullptr, nullptr, nullptr, &CommitFov);
+```
+
+A setting name that doesn't exist logs a line saying so and `GetIniSetting`/
+`SaveIniSetting` fall back to `0.0f`/`false` - a wrong name is a mod bug, not
+something to hide.

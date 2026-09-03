@@ -205,6 +205,7 @@ The widgets and the layout are Bethesda's.
     src/plugin.cpp         entry point and SKSE message listener
     src/Logging.*          log file setup
     src/Config.*           INI reading
+    src/IniSettings.*      real engine ini settings, by name, for a mod's own rows
     src/NativeMenu.*       System menu entries (CategoryList injection)
     src/VanillaSettings.*  real widgets in Gameplay/Display/Audio and
                            custom tabs
