@@ -77,8 +77,3 @@ extern "C" __declspec(dllexport) void __cdecl SetIniSetting(const char* a_name, 
 {
     IniSettings::SetFloat(a_name, a_value);
 }
-
-extern "C" __declspec(dllexport) bool __cdecl SaveIniSetting(const char* a_name)
-{
-    return IniSettings::SaveFloat(a_name);
-}

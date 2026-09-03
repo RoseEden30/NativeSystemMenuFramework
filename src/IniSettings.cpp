@@ -17,14 +17,6 @@ namespace IniSettings
             }
             return setting;
         }
-
-        // Which collection actually owns a_setting, not guessed from the name.
-        RE::INISettingCollection* CollectionFor(RE::Setting* a_setting)
-        {
-            return a_setting->IsPreferenceSetting()
-                       ? static_cast<RE::INISettingCollection*>(RE::INIPrefSettingCollection::GetSingleton())
-                       : RE::INISettingCollection::GetSingleton();
-        }
     }
 
     float GetFloat(const char* a_name)
@@ -37,15 +29,5 @@ namespace IniSettings
     {
         if (auto* setting = Find(a_name))
             setting->SetFloat(a_value);
-    }
-
-    bool SaveFloat(const char* a_name)
-    {
-        auto* setting = Find(a_name);
-        if (!setting)
-            return false;
-
-        auto* collection = CollectionFor(setting);
-        return collection && collection->WriteSetting(setting);
     }
 }

@@ -295,23 +295,13 @@ namespace NativeSystemMenuFramework
 
     using SetIniSettingFunction = void (*)(const char* name, float value);
 
-    // Live only, cheap enough for a SettingSetter. Call SaveIniSetting from
-    // SettingCommit to persist it.
+    // Live only - it doesn't persist to disk. Save the value in your own ini
+    // and reapply it here on load.
     inline void SetIniSetting(const char* a_name, float a_value)
     {
         static SetIniSettingFunction cache = nullptr;
         const auto func = Internal::GetFunction(cache, "SetIniSetting");
         if (func)
             func(a_name, a_value);
-    }
-
-    using SaveIniSettingFunction = bool (*)(const char* name);
-
-    // Writes the setting to disk, the same way vanilla's own menu does.
-    inline bool SaveIniSetting(const char* a_name)
-    {
-        static SaveIniSettingFunction cache = nullptr;
-        const auto func = Internal::GetFunction(cache, "SaveIniSetting");
-        return func ? func(a_name) : false;
     }
 }
