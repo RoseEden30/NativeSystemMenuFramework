@@ -1,7 +1,6 @@
 #include "Debug.h"
 
 #include "Config.h"
-#include "IniSettings.h"
 #include "NativeMenu.h"
 #include "Pages.h"
 #include "VanillaSettings.h"
@@ -33,29 +32,6 @@ namespace Debug
             std::snprintf(a_buffer, a_bufferSize, "%s", text.c_str());
         }
 
-        constexpr const char* kIniProbeSetting = "fDefaultWorldFOV:Display";
-
-        void __stdcall GetIniProbeLabel(char* a_buffer, int a_bufferSize)
-        {
-            std::snprintf(
-                a_buffer, a_bufferSize, "IniSettings probe: %s = %.2f", kIniProbeSetting,
-                IniSettings::GetFloat(kIniProbeSetting));
-        }
-
-        // Nudges kIniProbeSetting, confirms it applied, then restores it.
-        void __stdcall OnTestIniSetting()
-        {
-            constexpr float kNudge = 0.01f;
-
-            const auto original = IniSettings::GetFloat(kIniProbeSetting);
-            IniSettings::SetFloat(kIniProbeSetting, original + kNudge);
-            const bool applied =
-                std::abs(IniSettings::GetFloat(kIniProbeSetting) - (original + kNudge)) < 0.0001f;
-            IniSettings::SetFloat(kIniProbeSetting, original);
-
-            logger::info("Debug: IniSettings apply on '{}' - original {}, apply {}", kIniProbeSetting, original,
-                applied ? "ok" : "FAILED");
-        }
     }
 
     void RegisterDevMenu()
@@ -75,11 +51,6 @@ namespace Debug
         for (const auto* tab : { "NSMF Filler 1", "NSMF Filler 2", "NSMF Filler 3", "NSMF Filler 4" })
             VanillaSettings::AddLabel(
                 tab, &GetFillerLabel, VanillaSettings::Align::kLeft, NativeMenu::kFrameworkName);
-
-        VanillaSettings::AddLabel(
-            "NSMF Diagnostics", &GetIniProbeLabel, VanillaSettings::Align::kLeft, NativeMenu::kFrameworkName);
-        VanillaSettings::AddButton(
-            "NSMF Diagnostics", "Test IniSettings apply", &OnTestIniSetting, NativeMenu::kFrameworkName);
     }
 
     // What a clip actually exposes, read off the live tree rather than assumed
