@@ -630,6 +630,9 @@ namespace VanillaSettings
                 }
             }
 
+            if (!Config::AreDescriptionsShown())
+                description.clear();
+
             // Sits in the band between the last row and the panel's border,
             // clear of the scroll chevron above it. Expressed as a fraction of
             // a row rather than in pixels, so it holds whatever row height the

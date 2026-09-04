@@ -41,6 +41,9 @@ namespace
 
     void __stdcall CommitInjectionRetries(float) { Config::SaveInjectionRetryTicks(); }
 
+    float __stdcall GetShowDescriptions() { return Config::AreDescriptionsShown() ? 1.0f : 0.0f; }
+    void  __stdcall SetShowDescriptions(float a_value) { Config::SetDescriptionsShown(a_value != 0.0f); }
+
     void __stdcall FormatInjectionRetries(float a_value, char* a_buffer, int a_bufferSize)
     {
         const auto ticks = RetryTicksFor(a_value);
@@ -63,6 +66,9 @@ namespace
             kFrameworkTab, &GetVersionLabel, VanillaSettings::Align::kLeft, kFrameworkName);
         VanillaSettings::AddSetting(kFrameworkTab, VanillaSettings::Type::kCheckbox, "$NSMF_VERBOSE_LOGGING", &GetVerboseLogging,
             &SetVerboseLogging, 0.0f, {}, nullptr, nullptr, "$NSMF_VERBOSE_LOGGING_DESC", kFrameworkName);
+        VanillaSettings::AddSetting(kFrameworkTab, VanillaSettings::Type::kCheckbox, "$NSMF_SHOW_DESCRIPTIONS",
+            &GetShowDescriptions, &SetShowDescriptions, 1.0f, {}, nullptr, nullptr, "$NSMF_SHOW_DESCRIPTIONS_DESC",
+            kFrameworkName);
         VanillaSettings::AddSetting(
             kFrameworkTab, VanillaSettings::Type::kDropdown, "$NSMF_DESCRIPTION_SPACE",
             [] { return static_cast<float>(Config::GetDescriptionRows()); },

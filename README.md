@@ -169,6 +169,9 @@ build:
   vanilla: it already leaves a band free. Raise it to `1` or `2` if an
   interface replacer fits enough rows that descriptions run past the panel.
   Also a dropdown in the framework's own tab, applied as you change it.
+- `[General] ShowDescriptions` - on by default. Turn off to hide the
+  description line under a selected row entirely. Also a checkbox in the
+  framework's own tab.
 - `[Debug] Verbose` - off by default. Logs menu clicks, callback dispatch,
   injection details and dumps of the menu's live object tree. It also adds
   development-only menu items - an `NSMF Debug` entry and four `NSMF Filler`

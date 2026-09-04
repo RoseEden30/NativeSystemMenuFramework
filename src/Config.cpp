@@ -11,6 +11,7 @@ namespace Config
         bool g_verbose = false;
         int  g_injectionRetryTicks = 150;
         int  g_descriptionRows = 0;
+        bool g_showDescriptions = true;
 
         // Only the hidden ones are listed, so the file stays readable and an
         // entry nobody has touched needs no key at all.
@@ -37,6 +38,7 @@ namespace Config
                 kInjectionRetryMin, kInjectionRetryMax);
             g_descriptionRows = std::clamp(
                 static_cast<int>(ini.GetLongValue("General", "DescriptionRows", g_descriptionRows)), 0, 2);
+            g_showDescriptions = ini.GetBoolValue("General", "ShowDescriptions", g_showDescriptions);
             std::list<CSimpleIniA::Entry> keys;
             ini.GetAllKeys("Hidden", keys);
             for (const auto& key : keys) {
@@ -54,6 +56,7 @@ namespace Config
         ini.SetBoolValue("Debug", "Verbose", g_verbose);
         ini.SetLongValue("General", "InjectionRetryTicks", g_injectionRetryTicks);
         ini.SetLongValue("General", "DescriptionRows", g_descriptionRows);
+        ini.SetBoolValue("General", "ShowDescriptions", g_showDescriptions);
         if (ini.SaveFile(path.string().c_str()) < 0)
             logger::warn("Couldn't write default settings to {}", path.string());
     }
@@ -61,6 +64,7 @@ namespace Config
     bool IsVerboseLoggingEnabled() { return g_verbose; }
     int  GetInjectionRetryTicks() { return g_injectionRetryTicks; }
     int  GetDescriptionRows() { return g_descriptionRows; }
+    bool AreDescriptionsShown() { return g_showDescriptions; }
 
     bool IsEntryHidden(const std::string& a_entry) { return g_hiddenEntries.contains(a_entry); }
 
@@ -125,5 +129,18 @@ namespace Config
         ini.SetLongValue("General", "DescriptionRows", g_descriptionRows);
         if (ini.SaveFile(path.string().c_str()) < 0)
             logger::warn("Couldn't save [General] DescriptionRows to {}", path.string());
+    }
+
+    void SetDescriptionsShown(bool a_shown)
+    {
+        g_showDescriptions = a_shown;
+
+        const auto  path = GetIniPath();
+        CSimpleIniA ini;
+        ini.SetUnicode();
+        ini.LoadFile(path.string().c_str());
+        ini.SetBoolValue("General", "ShowDescriptions", g_showDescriptions);
+        if (ini.SaveFile(path.string().c_str()) < 0)
+            logger::warn("Couldn't save [General] ShowDescriptions to {}", path.string());
     }
 }

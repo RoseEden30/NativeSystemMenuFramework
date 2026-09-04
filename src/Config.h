@@ -35,6 +35,13 @@ namespace Config
     // Saves to the ini. Applies on the next tick.
     void SetDescriptionRows(int a_rows);
 
+    // [General] ShowDescriptions - whether the description line under a
+    // selected row is shown at all.
+    bool AreDescriptionsShown();
+
+    // Saves to the ini. Applies on the next tick.
+    void SetDescriptionsShown(bool a_shown);
+
     // [Hidden] - System menu entries the player has hidden, keyed by the
     // entry's own text rather than its position: a replaced interface, or a
     // version without the Creations entry, shifts every position. An unknown
