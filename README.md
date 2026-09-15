@@ -7,7 +7,7 @@ game already has, live, at runtime.
 It is an optional dependency: every call is safe to make unconditionally, and
 a mod built against it still works when it isn't installed.
 
-A mod gets three shapes, all of them the game's own screens.
+A mod gets four shapes, all of them the game's own screens.
 
 **Settings > your tab.** Real ScrollBar / OptionStepper / CheckBox widgets,
 alongside Gameplay, Display and Audio, with a description under the selected
@@ -19,6 +19,10 @@ row:
 jump straight into one, or just call you back:
 
 ![A mod entry in the System menu](docs/images/system-menu.jpg)
+
+**A key in Controls.** A row on the game's own Controls screen, rebound by the
+game itself. Either one of yours, or one Bethesda ships bound but hidden -
+the eight hotkeys, the mouse wheel zoom.
 
 **A page** - a list of items, each opening a panel of scrolling text. For a
 readme or a changelog, not for settings:
@@ -43,8 +47,8 @@ It improves the game's own Settings screen even with no mod using it:
   box on the right. Skyrim's own rows included.
 - **Dropdown arrows disappear at their limits** instead of sitting there doing
   nothing, on vanilla's rows as well as ours.
-- **A scrollbar on the Settings lists**, in place of the two arrows, so a long
-  tab shows how far it runs.
+- **A scrollbar on the Settings and Controls lists**, in place of the two
+  arrows, so a long list shows how far it runs.
 - **Hiding System menu entries**, from a `Native System Menu Framework` tab under
   Settings. Skyrim's own included, so Save, Load or Installed Content can be
   taken off the list. Settings and Quit are always kept.
@@ -86,10 +90,10 @@ Rows are real vanilla widgets, not lookalikes, driven through the same
 dispatch Skyrim uses for its own. The rest is what the Settings screen lacks
 once it grows past what Bethesda designed it for:
 
-- **Scrolling** - the Settings lists ship with a pair of arrows and no bar.
-  The framework attaches the interface's own `JournalScrollBar`, the one the
-  Help and Creations lists use, hands the sizing back to the game and hides
-  the arrows. An interface without that bar keeps them.
+- **Scrolling** - the Settings and Controls lists ship with a pair of arrows
+  and no bar. The framework attaches the interface's own `JournalScrollBar`,
+  the one the Help and Creations lists use, hands the sizing back to the game
+  and hides the arrows. An interface without that bar keeps them.
 - **Descriptions** - an optional line under the rows, shown while a row is
   selected. Tabs can carry one too. Skyrim's own rows and tabs get them.
 - **Disabled rows** - a row that your code currently ignores can say so, and
@@ -101,6 +105,10 @@ once it grows past what Bethesda designed it for:
 - **Predictable ordering** - your tabs stay together, in the order you declare
   them, and the groups are ordered by mod name rather than by plugin load
   order.
+- **Keys** - a row on the Controls screen, remapped by the game itself, with
+  the conflict check and the reset to defaults that come with it. The key is
+  kept in the framework's ini rather than the game's, which is indexed rather
+  than named and would shift the player's other bindings.
 - **Pages** - a third shape besides settings and tabs: a list of items, each
   opening a panel of text, for anything a player reads rather than sets.
 - **Hiding** - the player can hide System menu entries, vanilla ones included,
@@ -118,6 +126,10 @@ once it grows past what Bethesda designed it for:
   but only 1.6 has actually been run.
 - A mod that registers while the System menu is already open appears the next
   time it is opened.
+- **Controls lists one context.** The game builds that screen from its
+  Gameplay actions alone, so the keys a menu uses - Accept, Cancel, the
+  inventory and map rows - can't be surfaced there, only edited by hand in
+  `controlmap.txt`.
 - **Interface replacers.** Sizes and positions are measured off the live
   interface, so a replacer's layout is followed within what it provides. One
   without vanilla's `JournalScrollBar` keeps its arrows. One that fits more
@@ -172,6 +184,10 @@ build:
 - `[General] ShowDescriptions` - on by default. Turn off to hide the
   description line under a selected row entirely. Also a checkbox in the
   framework's own tab.
+- `[Controls]` - written by the framework, not meant to be hand-edited. Keys
+  the player set on rows a mod put on the Controls screen, kept here because
+  the game's own file is indexed rather than named. Only what differs from
+  `controlmap.txt` is listed; resetting controls to defaults clears it.
 - `[Debug] Verbose` - off by default. Logs menu clicks, callback dispatch,
   injection details and dumps of the menu's live object tree. It also adds
   development-only menu items - an `NSMF Debug` entry and four `NSMF Filler`
@@ -213,6 +229,8 @@ The widgets and the layout are Bethesda's.
     src/VanillaSettings.*  real widgets in Gameplay/Display/Audio and
                            custom tabs
     src/VanillaDescriptions.h  descriptions for Skyrim's own rows
+    src/Controls.*         rows on the Controls screen, through the ControlMap
+    src/GFx.h              Scaleform writes that skip an unchanged value
     src/Text.h             UTF-8 to UTF-16 for Scaleform, with interning
     src/Debug.*            development-only: tree dumps and placeholder menu
                            items, all behind [Debug] Verbose

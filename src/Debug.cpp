@@ -1,6 +1,7 @@
 #include "Debug.h"
 
 #include "Config.h"
+#include "Controls.h"
 #include "NativeMenu.h"
 #include "Pages.h"
 #include "VanillaSettings.h"
@@ -45,6 +46,10 @@ namespace Debug
 
         Pages::AddItem("NSMF Debug Page", "Short text", &GetShortPageText, NativeMenu::kFrameworkName);
         Pages::AddItem("NSMF Debug Page", "Long text", &GetLongPageText, NativeMenu::kFrameworkName);
+
+        // An action the game has never heard of, on V, which vanilla leaves free.
+        Controls::Add("NSMFDebugPress", Controls::Context::kGameplay, "NSMF Debug Press", 0x2f, -1,
+            [] { logger::info("Controls: debug press fired"); }, {}, NativeMenu::kFrameworkName);
 
         // The tab list only scrolls once it outgrows the screen, which the
         // real tabs never do on their own. These push it over.

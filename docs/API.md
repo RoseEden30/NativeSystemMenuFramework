@@ -38,6 +38,7 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 | Add a setting the player can change                | [`AddVanillaSetting`](#addvanillasetting)        |
 | Show a value without letting them change it        | [`AddVanillaLabel`](#addvanillalabel)            |
 | Run an action when they click a row                | [`AddVanillaButton`](#addvanillabutton)          |
+| Give my mod a key the player can rebind            | [`AddVanillaControl`](#addvanillacontrol)        |
 | Group my settings in a tab of my own               | any of the above, with a `tab` name of your own  |
 | Explain what one of my tabs is for                 | [`SetVanillaTabDescription`](#setvanillatabdescription) |
 | Put my mod in the Escape menu, next to Save / Quit | [`AddSystemMenuEntry`](#addsystemmenuentry)      |
@@ -105,6 +106,10 @@ where it sits.
 
 **On a native tab your rows land after vanilla's**, unless a row names one to
 sit under - see [`placeAfter`](#addvanillasetting).
+
+**Controls rows sit where the game puts them.** That screen sorts by the
+action's own index in `controlmap.txt`, so a surfaced row lands among the
+vanilla ones it belongs with, and an action of yours lands at the end.
 
 ## Translations
 
@@ -447,6 +452,62 @@ click, on the menu's own update tick. Same tab rules as `AddVanillaSetting`.
 void __stdcall OnReload() { Shaders::ReloadFromDisk(); }
 AddVanillaButton("Debug", "Reload Shaders", &OnReload);
 ```
+
+## `AddVanillaControl`
+
+```cpp
+bool AddVanillaControl(const char* event, ControlContext context = ControlContext::kGameplay,
+    const char* label = nullptr, int defaultKey = -1, int defaultGamepad = -1,
+    ControlPress onPress = nullptr, const char* description = nullptr);
+```
+
+Puts a row on the System menu's **Controls** screen, alongside Jump and
+Sprint. The remap, the conflict check and the "reset to defaults" are the
+game's own - this only decides which rows are on that screen.
+
+**`event`** - the engine's name for the action, the first field of a
+`controlmap.txt` line. Never translated, never shown to the player, and, as
+that file puts it, not yours to alter for vanilla actions.
+
+Two cases, same call:
+
+**The game already has this action.** It is simply surfaced. Bethesda ships a
+number of them bound but hidden - the eight `Hotkey1`..`Hotkey8`, `Zoom In`
+and `Zoom Out`, and on a gamepad most of the movement row. The defaults are
+ignored, the action keeps whatever `controlmap.txt` gave it.
+
+```cpp
+AddVanillaControl("Hotkey1", ControlContext::kGameplay, "$MYMOD_HOTKEY_1");
+```
+
+**The game has never heard of it.** It is created from `defaultKey` and
+`defaultGamepad`, and `onPress` runs when the player presses it.
+
+```cpp
+void __stdcall OnToggle() { Compass::Toggle(); }
+AddVanillaControl("MyMod_Compass", ControlContext::kGameplay, "$MYMOD_COMPASS", 0x2f, -1, &OnToggle);
+```
+
+**`label`** - what the row reads. Only needed for actions the game has no
+wording for, which is every hidden one and every new one: they would show
+their raw `$Hotkey1`. Resolved like any other key, so it can be translated.
+Leave it null to keep vanilla's own text.
+
+**`defaultKey`/`defaultGamepad`** - DirectInput scan codes, `-1` for unbound.
+`0x2f` is V, `0x30` is B; `controlmap.txt` lists the rest.
+
+**`onPress`** - runs on the game's input thread, once per press, only for
+actions you created. The game already dispatches its own.
+
+**Where the keys are kept.** The game's own `ControlMap_Custom.txt` is indexed
+rather than named, so an action it won't know about next launch can't go in
+it - it would shift the player's other bindings. The framework keeps those
+keys in its own ini instead, and only the ones the player actually changed, so
+a different `controlmap.txt` still brings its own defaults.
+
+**`context`** - which of the game's input contexts the action belongs to.
+Only `kGameplay` rows appear on the Controls screen; the others exist but the
+game does not list them.
 
 ## `SetVanillaTabDescription`
 

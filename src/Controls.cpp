@@ -22,6 +22,7 @@ namespace Controls
             std::function<void()> onPress;
             std::string           description;
             std::string           owner;
+            bool                  created = false;
         };
 
         std::recursive_mutex g_mutex;
@@ -91,6 +92,69 @@ namespace Controls
             return found;
         }
 
+        // Rows sort by this, so a new action lands after the game's own.
+        std::int8_t NextIndex(RE::ControlMap::InputContext& a_context)
+        {
+            std::int8_t next = 0;
+            for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad; ++device) {
+                for (const auto& mapping : a_context.deviceMappings[device])
+                    next = std::max(next, mapping.indexInContext);
+            }
+            return static_cast<std::int8_t>(next < 127 ? next + 1 : 127);
+        }
+
+        bool Create(RE::ControlMap::InputContext& a_context, const Row& a_row,
+            const std::unordered_map<std::string, int>& a_saved)
+        {
+            const auto index = NextIndex(a_context);
+
+            bool       added = false;
+            const auto push = [&](std::size_t a_device, int a_default) {
+                if (a_default < 0)
+                    return;
+
+                const auto name = KeyName(a_row.event, a_device);
+                g_defaults[name] = a_default;
+
+                const auto saved = a_saved.find(name);
+                const auto key = saved != a_saved.end() && saved->second >= 0 ? saved->second : a_default;
+
+                RE::ControlMap::UserEventMapping mapping{};
+                mapping.eventID = a_row.event.c_str();
+                mapping.inputKey = static_cast<std::uint16_t>(key);
+                mapping.indexInContext = index;
+                mapping.remappable = true;
+
+                a_context.deviceMappings[a_device].push_back(mapping);
+                added = true;
+            };
+
+            push(RE::INPUT_DEVICES::kKeyboard, a_row.defaultKey);
+            push(RE::INPUT_DEVICES::kGamepad, a_row.defaultGamepad);
+            return added;
+        }
+
+        // The game's file is indexed, not named, and it only writes what it
+        // considers remappable.
+        void HideCreated(bool a_hide)
+        {
+            for (const auto& row : g_rows) {
+                if (!row.created)
+                    continue;
+
+                auto* context = ContextFor(row.context);
+                if (!context)
+                    continue;
+
+                for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad; ++device) {
+                    for (auto& mapping : context->deviceMappings[device]) {
+                        if (std::string_view(mapping.eventID.c_str()) == row.event)
+                            mapping.remappable = !a_hide;
+                    }
+                }
+            }
+        }
+
         // Vanilla reloads its defaults here, flags included.
         void OnResetControls(const RE::FxDelegateArgs& a_params)
         {
@@ -104,9 +168,6 @@ namespace Controls
         // The game has just written the player's keys into the ControlMap.
         void OnSaveControls(const RE::FxDelegateArgs& a_params)
         {
-            if (g_originalSave.callback)
-                g_originalSave.callback(a_params);
-
             const std::lock_guard lock(g_mutex);
 
             std::unordered_map<std::string, int> keys;
@@ -131,6 +192,56 @@ namespace Controls
 
             Config::SaveControlKeys(keys);
             logger::debug("Controls: saved {} key(s)", keys.size());
+
+            HideCreated(true);
+            if (g_originalSave.callback)
+                g_originalSave.callback(a_params);
+            HideCreated(false);
+        }
+
+        // Nothing dispatches an action the game doesn't own. QUserEvent
+        // resolves through the ControlMap, so the context is accounted for.
+        class InputSink : public RE::BSTEventSink<RE::InputEvent*>
+        {
+        public:
+            RE::BSEventNotifyControl ProcessEvent(
+                RE::InputEvent* const* a_event, RE::BSTEventSource<RE::InputEvent*>*) override
+            {
+                if (!a_event)
+                    return RE::BSEventNotifyControl::kContinue;
+
+                for (auto* event = *a_event; event; event = event->next) {
+                    auto* button = event->AsButtonEvent();
+                    if (!button || !button->IsDown())
+                        continue;
+
+                    const std::lock_guard lock(g_mutex);
+                    const std::string_view fired(button->QUserEvent().c_str());
+                    for (const auto& row : g_rows) {
+                        if (row.onPress && row.event == fired)
+                            row.onPress();
+                    }
+                }
+                return RE::BSEventNotifyControl::kContinue;
+            }
+        };
+        InputSink g_inputSink;
+        bool      g_listening = false;
+
+        void ListenForPresses()
+        {
+            if (g_listening)
+                return;
+            if (std::none_of(g_rows.begin(), g_rows.end(), [](const Row& a_row) { return a_row.onPress != nullptr; }))
+                return;
+
+            auto* input = RE::BSInputDeviceManager::GetSingleton();
+            if (!input)
+                return;
+
+            input->AddEventSink(&g_inputSink);
+            g_listening = true;
+            logger::debug("Controls: listening for presses");
         }
 
         void InstallHooks(RE::FxDelegate* a_fxDelegate)
@@ -177,7 +288,7 @@ namespace Controls
         const auto saved = Config::GetControlKeys();
 
         int shown = 0;
-        for (const auto& row : g_rows) {
+        for (auto& row : g_rows) {
             auto* context = ContextFor(row.context);
             if (!context) {
                 logger::warn("Controls: '{}' asked for a context this game has no map for", row.event);
@@ -185,8 +296,11 @@ namespace Controls
             }
 
             if (!Surface(*context, row.event, saved)) {
-                logger::warn("Controls: '{}' isn't in that context", row.event);
-                continue;
+                row.created = Create(*context, row, saved);
+                if (!row.created) {
+                    logger::warn("Controls: '{}' is unknown and has no default key", row.event);
+                    continue;
+                }
             }
             ++shown;
             if (!row.label.empty())
@@ -194,8 +308,11 @@ namespace Controls
             logger::debug("Controls: '{}' [{}] shown", row.event, row.owner.empty() ? "unnamed" : row.owner.c_str());
         }
 
-        if (!g_rows.empty())
-            logger::info("Controls: {} of {} row(s) shown", shown, g_rows.size());
+        if (g_rows.empty())
+            return;
+
+        ListenForPresses();
+        logger::info("Controls: {} of {} row(s) shown", shown, g_rows.size());
     }
 
     void Reset()
