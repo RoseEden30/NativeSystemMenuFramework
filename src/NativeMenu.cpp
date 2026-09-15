@@ -482,7 +482,7 @@ namespace NativeMenu
             }
 
             HookDelegate(a_this->fxDelegate.get());
-            Controls::Tick(systemPage);
+            Controls::Tick(a_this, systemPage);
             VanillaSettings::Tick(a_this, view, systemPage);
 
             const int pending = g_pendingEntry.exchange(-1);
@@ -550,6 +550,7 @@ namespace NativeMenu
                     g_delegateHooked = false;
                     g_originalSetSaveDisabled = {};
                     VanillaSettings::Reset();
+                    Controls::Reset();
                     Pages::Reset();
                 }
                 return RE::BSEventNotifyControl::kContinue;

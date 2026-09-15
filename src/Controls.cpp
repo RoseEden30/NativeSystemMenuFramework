@@ -1,5 +1,6 @@
 #include "Controls.h"
 
+#include "Config.h"
 #include "Debug.h"
 #include "ListRows.h"
 #include "Text.h"
@@ -28,6 +29,9 @@ namespace Controls
 
         std::unordered_map<std::string, std::string> g_labels;
 
+        // Only what the player actually changed gets written down.
+        std::unordered_map<std::string, int> g_defaults;
+
         using ContextID = RE::UserEvents::INPUT_CONTEXT_ID;
 
         ContextID Resolve(Context a_context)
@@ -51,8 +55,18 @@ namespace Controls
             return controls ? controls->controlMap[Resolve(a_context)] : nullptr;
         }
 
+        bool                         g_hooked = false;
+        RE::FxDelegate::CallbackDefn g_originalReset{};
+        RE::FxDelegate::CallbackDefn g_originalSave{};
+
+        std::string KeyName(std::string_view a_event, std::size_t a_device)
+        {
+            return std::string(a_event) + "|" + std::to_string(a_device);
+        }
+
         // Some actions carry a second key, and unlocking both lists the row twice.
-        bool Unlock(RE::ControlMap::InputContext& a_context, std::string_view a_event)
+        bool Surface(RE::ControlMap::InputContext& a_context, std::string_view a_event,
+            const std::unordered_map<std::string, int>& a_saved)
         {
             bool found = false;
             for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad; ++device) {
@@ -61,12 +75,84 @@ namespace Controls
                     if (std::string_view(mapping.eventID.c_str()) != a_event)
                         continue;
                     found = true;
-                    if (first)
-                        mapping.remappable = true;
+                    if (!first)
+                        continue;
                     first = false;
+                    mapping.remappable = true;
+
+                    const auto name = KeyName(a_event, device);
+                    g_defaults[name] = mapping.inputKey;
+
+                    const auto saved = a_saved.find(name);
+                    if (saved != a_saved.end() && saved->second >= 0)
+                        mapping.inputKey = static_cast<std::uint16_t>(saved->second);
                 }
             }
             return found;
+        }
+
+        // Vanilla reloads its defaults here, flags included.
+        void OnResetControls(const RE::FxDelegateArgs& a_params)
+        {
+            if (g_originalReset.callback)
+                g_originalReset.callback(a_params);
+
+            Config::SaveControlKeys({});
+            Apply();
+        }
+
+        // The game has just written the player's keys into the ControlMap.
+        void OnSaveControls(const RE::FxDelegateArgs& a_params)
+        {
+            if (g_originalSave.callback)
+                g_originalSave.callback(a_params);
+
+            const std::lock_guard lock(g_mutex);
+
+            std::unordered_map<std::string, int> keys;
+            for (const auto& row : g_rows) {
+                auto* context = ContextFor(row.context);
+                if (!context)
+                    continue;
+
+                for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad; ++device) {
+                    for (const auto& mapping : context->deviceMappings[device]) {
+                        if (!mapping.remappable || std::string_view(mapping.eventID.c_str()) != row.event)
+                            continue;
+
+                        const auto name = KeyName(row.event, device);
+                        const auto original = g_defaults.find(name);
+                        if (original == g_defaults.end() || original->second != mapping.inputKey)
+                            keys[name] = mapping.inputKey;
+                        break;
+                    }
+                }
+            }
+
+            Config::SaveControlKeys(keys);
+            logger::debug("Controls: saved {} key(s)", keys.size());
+        }
+
+        void InstallHooks(RE::FxDelegate* a_fxDelegate)
+        {
+            if (!a_fxDelegate)
+                return;
+
+            const auto hook = [&](const char* a_name, RE::FxDelegate::CallbackDefn& a_original,
+                                   RE::FxDelegateHandler::CallbackFn* a_replacement) {
+                RE::GString name(a_name);
+                if (!a_fxDelegate->callbacks.Get(name, &a_original)) {
+                    logger::warn("Controls: no '{}' callback to hook", a_name);
+                    return;
+                }
+                a_fxDelegate->callbacks.Set(name, RE::FxDelegate::CallbackDefn{ a_original.handler, a_replacement });
+                logger::debug("Controls: '{}' hooked", a_name);
+            };
+
+            hook("ResetControlsToDefaults", g_originalReset, &OnResetControls);
+            hook("SaveControls", g_originalSave, &OnSaveControls);
+
+            g_hooked = true;
         }
     }
 
@@ -88,6 +174,8 @@ namespace Controls
     {
         const std::lock_guard lock(g_mutex);
 
+        const auto saved = Config::GetControlKeys();
+
         int shown = 0;
         for (const auto& row : g_rows) {
             auto* context = ContextFor(row.context);
@@ -96,7 +184,7 @@ namespace Controls
                 continue;
             }
 
-            if (!Unlock(*context, row.event)) {
+            if (!Surface(*context, row.event, saved)) {
                 logger::warn("Controls: '{}' isn't in that context", row.event);
                 continue;
             }
@@ -110,8 +198,20 @@ namespace Controls
             logger::info("Controls: {} of {} row(s) shown", shown, g_rows.size());
     }
 
-    void Tick(RE::GFxValue& a_page)
+    void Reset()
     {
+        const std::lock_guard lock(g_mutex);
+
+        g_hooked = false;
+        g_originalReset = {};
+        g_originalSave = {};
+    }
+
+    void Tick(RE::JournalMenu* a_this, RE::GFxValue& a_page)
+    {
+        if (!g_hooked && a_this && a_this->fxDelegate)
+            InstallHooks(a_this->fxDelegate.get());
+
         RE::GFxValue panel, list;
         if (!a_page.GetMember("InputMappingPanel", &panel) || !panel.IsObject() ||
             !panel.GetMember("List_mc", &list) || !list.IsObject())
@@ -132,7 +232,6 @@ namespace Controls
         const auto clipCount = static_cast<std::uint32_t>(maxShown.GetNumber());
         const auto entryCount = entries.GetArraySize();
         for (std::uint32_t i = 0; i < clipCount; ++i) {
-            // Clips are recycled as the list scrolls.
             RE::GFxValue clip, itemIndex, entry, event;
             if (!list.GetMember(("Entry" + std::to_string(i)).c_str(), &clip) || !clip.IsObject() ||
                 !clip.GetMember("itemIndex", &itemIndex) || !itemIndex.IsNumber())

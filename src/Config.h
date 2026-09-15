@@ -42,6 +42,11 @@ namespace Config
     // Saves to the ini. Applies on the next tick.
     void SetDescriptionsShown(bool a_shown);
 
+    // [Controls] - keys set on rows a mod surfaced. The game's own file only
+    // reapplies what it already considered remappable, so it drops ours.
+    std::unordered_map<std::string, int> GetControlKeys();
+    void SaveControlKeys(const std::unordered_map<std::string, int>& a_keys);
+
     // [Hidden] - System menu entries the player has hidden, keyed by the
     // entry's own text rather than its position: a replaced interface, or a
     // version without the Creations entry, shifts every position. An unknown

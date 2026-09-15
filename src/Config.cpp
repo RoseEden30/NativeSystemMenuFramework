@@ -66,6 +66,37 @@ namespace Config
     int  GetDescriptionRows() { return g_descriptionRows; }
     bool AreDescriptionsShown() { return g_showDescriptions; }
 
+    std::unordered_map<std::string, int> GetControlKeys()
+    {
+        const auto  path = GetIniPath();
+        CSimpleIniA ini;
+        ini.SetUnicode();
+        if (ini.LoadFile(path.string().c_str()) < 0)
+            return {};
+
+        std::unordered_map<std::string, int> keys;
+        std::list<CSimpleIniA::Entry>        entries;
+        ini.GetAllKeys("Controls", entries);
+        for (const auto& entry : entries)
+            keys.emplace(entry.pItem, static_cast<int>(ini.GetLongValue("Controls", entry.pItem, -1)));
+        return keys;
+    }
+
+    void SaveControlKeys(const std::unordered_map<std::string, int>& a_keys)
+    {
+        const auto  path = GetIniPath();
+        CSimpleIniA ini;
+        ini.SetUnicode();
+        ini.LoadFile(path.string().c_str());
+
+        ini.Delete("Controls", nullptr, true);
+        for (const auto& [name, key] : a_keys)
+            ini.SetLongValue("Controls", name.c_str(), key, nullptr, true);
+
+        if (ini.SaveFile(path.string().c_str()) < 0)
+            logger::warn("Couldn't save [Controls] to {}", path.string());
+    }
+
     bool IsEntryHidden(const std::string& a_entry) { return g_hiddenEntries.contains(a_entry); }
 
     void SetEntryHidden(const std::string& a_entry, bool a_hidden)
