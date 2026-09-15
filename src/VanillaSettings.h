@@ -64,6 +64,12 @@ namespace VanillaSettings
     bool AddButton(
         std::string a_tab, std::string a_label, std::function<void()> a_onPress, std::string a_owner = {});
 
+    // Native tabs only: puts an already-registered row just under a_anchor,
+    // a vanilla row's raw "$..." key or another row's registered label. An
+    // anchor the tab doesn't carry appends as usual.
+    bool SetAnchor(const std::string& a_tab, const std::string& a_label, std::string a_anchor,
+        const std::string& a_owner);
+
     // Shown while a_tab is highlighted in the category list. Empty clears it.
     bool SetTabDescription(std::string a_tab, std::string a_description);
 

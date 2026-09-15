@@ -62,6 +62,13 @@ extern "C" __declspec(dllexport) bool __cdecl AddVanillaButton(
         a_tab ? a_tab : "", a_label ? a_label : "", a_onPress, a_owner ? a_owner : "");
 }
 
+extern "C" __declspec(dllexport) bool __cdecl SetVanillaSettingAnchor(
+    const char* a_tab, const char* a_label, const char* a_anchor, const char* a_owner)
+{
+    return VanillaSettings::SetAnchor(
+        a_tab ? a_tab : "", a_label ? a_label : "", a_anchor ? a_anchor : "", a_owner ? a_owner : "");
+}
+
 extern "C" __declspec(dllexport) bool __cdecl SetVanillaTabDescription(
     const char* a_tab, const char* a_description)
 {

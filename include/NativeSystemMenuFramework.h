@@ -206,6 +206,22 @@ namespace NativeSystemMenuFramework
         SettingIsEnabled isEnabled, SettingFormatValue formatValue, const char* description, const char* owner,
         SettingCommit onCommit);
 
+    using SetVanillaSettingAnchorFunction = bool (*)(
+        const char* tab, const char* label, const char* anchor, const char* owner);
+
+    // Native tabs only: moves one of your rows out of the tail and under
+    // a_anchor - a vanilla row's own key, e.g. "$Invert Y", or the label
+    // another row was registered with. Call it after the row's own Add call.
+    //
+    // Anchors are advisory: a game version or an interface replacer without
+    // that row just puts yours back at the end, as if you hadn't asked.
+    inline bool SetVanillaSettingAnchor(const char* a_tab, const char* a_label, const char* a_anchor)
+    {
+        static SetVanillaSettingAnchorFunction cache = nullptr;
+        const auto func = Internal::GetFunction(cache, "SetVanillaSettingAnchor");
+        return func ? func(a_tab, a_label, a_anchor, Internal::Owner().c_str()) : false;
+    }
+
     // Adds a real vanilla setting row, using the same ScrollBar/OptionStepper/
     // CheckBox widgets Bethesda does.
     //
@@ -215,6 +231,7 @@ namespace NativeSystemMenuFramework
     // settings to default". a_options applies to kDropdown only.
     // a_description, if given, shows under the rows while the row is selected.
     // a_onCommit, if given, runs when the value settles - see SettingCommit.
+    // a_placeAfter, if given, is SetVanillaSettingAnchor's a_anchor.
     //
     // Returns false if the framework isn't installed, a_tab or a_label is
     // empty, or a_onChange is null.
@@ -222,7 +239,7 @@ namespace NativeSystemMenuFramework
         SettingGetter a_getValue, SettingSetter a_onChange, float a_defaultValue,
         const std::vector<std::string>& a_options = {}, SettingIsEnabled a_isEnabled = nullptr,
         SettingFormatValue a_formatValue = nullptr, const char* a_description = nullptr,
-        SettingCommit a_onCommit = nullptr)
+        SettingCommit a_onCommit = nullptr, const char* a_placeAfter = nullptr)
     {
         static AddVanillaSettingFunction cache = nullptr;
         const auto func = Internal::GetFunction(cache, "AddVanillaSetting");
@@ -234,9 +251,14 @@ namespace NativeSystemMenuFramework
         for (const auto& option : a_options)
             options.push_back(option.c_str());
 
-        return func(a_tab, static_cast<int>(a_type), a_label, a_getValue, a_onChange, a_defaultValue, options.data(),
-            static_cast<int>(options.size()), a_isEnabled, a_formatValue, a_description, Internal::Owner().c_str(),
-            a_onCommit);
+        if (!func(a_tab, static_cast<int>(a_type), a_label, a_getValue, a_onChange, a_defaultValue, options.data(),
+                static_cast<int>(options.size()), a_isEnabled, a_formatValue, a_description,
+                Internal::Owner().c_str(), a_onCommit))
+            return false;
+
+        if (a_placeAfter && *a_placeAfter)
+            SetVanillaSettingAnchor(a_tab, a_label, a_placeAfter);
+        return true;
     }
 
     // Text for a read-only row - no widget binds, so it is just a label.

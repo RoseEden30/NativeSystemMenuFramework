@@ -39,6 +39,8 @@ namespace VanillaSettings
             Align align = Align::kLeft;
             // Which mod registered this row.
             std::string owner;
+            // Native tabs only: the row this one goes under - see SetAnchor.
+            std::string placeAfter;
             // kButton only: ticks left to keep the box checked after a press,
             // so the click is actually seen before it springs back.
             int flashTicks = 0;
@@ -1007,6 +1009,53 @@ namespace VanillaSettings
         }
 
 
+        // Our setting behind an entry object, or kNoSetting for a vanilla row.
+        std::size_t SettingForEntry(RE::GFxValue& a_entryList, std::uint32_t a_index)
+        {
+            RE::GFxValue entry, idVal;
+            if (!a_entryList.GetElement(a_index, &entry) || !entry.IsObject() ||
+                !entry.GetMember("ID", &idVal) || !idVal.IsNumber())
+                return kNoSetting;
+
+            const auto id = static_cast<std::uint32_t>(idVal.GetNumber());
+            if (id < kIdBase || (id - kIdBase) >= g_settings.size())
+                return kNoSetting;
+            return id - kIdBase;
+        }
+
+        // Vanilla rows by their raw "$..." key, ours by the registered label -
+        // our entry text is already translated.
+        bool EntryMatches(RE::GFxValue& a_entryList, std::uint32_t a_index, const std::string& a_key)
+        {
+            const auto ours = SettingForEntry(a_entryList, a_index);
+            if (ours != kNoSetting)
+                return g_settings[ours].label == a_key;
+
+            RE::GFxValue entry, text;
+            return a_entryList.GetElement(a_index, &entry) && entry.IsObject() &&
+                entry.GetMember("text", &text) && text.IsString() && a_key == text.GetString();
+        }
+
+        // -1 when the tab has no such row. Steps past rows already anchored
+        // there, so several on one anchor keep their registration order.
+        int InsertPosAfter(RE::GFxValue& a_entryList, const std::string& a_key)
+        {
+            const auto count = a_entryList.GetArraySize();
+            for (std::uint32_t i = 0; i < count; ++i) {
+                if (!EntryMatches(a_entryList, i, a_key))
+                    continue;
+
+                auto pos = i + 1;
+                for (; pos < count; ++pos) {
+                    const auto ours = SettingForEntry(a_entryList, pos);
+                    if (ours == kNoSetting || g_settings[ours].placeAfter != a_key)
+                        break;
+                }
+                return static_cast<int>(pos);
+            }
+            return -1;
+        }
+
         // Native tab (Gameplay/Display/Audio) already showing vanilla's own
         // entries - append ours to what's already there.
         void InjectNativeTab(RE::GFxMovie* a_view, RE::GFxValue& a_list, const std::string& a_tab)
@@ -1022,7 +1071,20 @@ namespace VanillaSettings
                 if (g_settings[i].tab != a_tab)
                     continue;
                 RE::GFxValue entry = BuildEntry(a_view, g_settings[i], i);
-                entryList.Invoke("push", nullptr, &entry, 1);
+
+                // An anchor this tab doesn't carry falls back to the end.
+                const auto& anchor = g_settings[i].placeAfter;
+                const int   at = anchor.empty() ? -1 : InsertPosAfter(entryList, anchor);
+                if (!anchor.empty())
+                    logger::debug("VanillaSettings: '{}' after '{}' at index {}", g_settings[i].label, anchor, at);
+
+                if (at < 0) {
+                    entryList.Invoke("push", nullptr, &entry, 1);
+                } else {
+                    const RE::GFxValue args[3] = { RE::GFxValue(static_cast<double>(at)), RE::GFxValue(0.0), entry };
+                    if (!entryList.Invoke("splice", nullptr, args, 3))
+                        entryList.Invoke("push", nullptr, &entry, 1);
+                }
                 ++added;
             }
             if (added == 0)
@@ -1526,6 +1588,32 @@ namespace VanillaSettings
         g_settings.push_back({ std::move(a_tab), Type::kButton, std::move(a_label), nullptr, nullptr, nullptr,
             0.0f, {}, nullptr, nullptr, nullptr, std::move(a_onPress), {}, Align::kLeft, std::move(a_owner) });
         return true;
+    }
+
+    bool SetAnchor(const std::string& a_tab, const std::string& a_label, std::string a_anchor,
+        const std::string& a_owner)
+    {
+        const std::lock_guard lock(g_settingsMutex);
+
+        if (a_anchor.empty())
+            return false;
+
+        // A custom tab is built in declaration order - nothing to anchor to.
+        if (!IsNativeTab(a_tab)) {
+            logger::warn("VanillaSettings: '{}' isn't a native tab - '{}' keeps its place", a_tab, a_label);
+            return false;
+        }
+
+        // Backwards: this follows the Add* call that registered the row.
+        for (auto it = g_settings.rbegin(); it != g_settings.rend(); ++it) {
+            if (it->tab != a_tab || it->label != a_label || it->owner != a_owner)
+                continue;
+            it->placeAfter = std::move(a_anchor);
+            return true;
+        }
+
+        logger::warn("VanillaSettings: no '{}' row on '{}' to anchor", a_label, a_tab);
+        return false;
     }
 
     bool SetTabDescription(std::string a_tab, std::string a_description)

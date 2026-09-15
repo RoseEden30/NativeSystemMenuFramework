@@ -103,6 +103,9 @@ Gameplay / Display / Audio stay first and custom tabs follow.
 the same tab. A tab belongs to whoever created it - only one of them can decide
 where it sits.
 
+**On a native tab your rows land after vanilla's**, unless a row names one to
+sit under - see [`placeAfter`](#addvanillasetting).
+
 ## Translations
 
 A mod ships its text next to its DLL and needs no esp:
@@ -317,6 +320,28 @@ saying what the setting does rather than restating its name.
 AddVanillaSetting("Display", Type::kCheckbox, "Motion Blur", &Get, &Set, 0.0f, {}, nullptr, nullptr,
     "Blurs the screen during fast movement.");
 ```
+
+**`placeAfter`** - optional, native tabs only. Puts the row under a named one
+instead of at the end of the tab. It takes a vanilla row's own key, or the
+label another row was registered with:
+
+```cpp
+AddVanillaSetting("Gameplay", Type::kCheckbox, "$MY_INVERT_X", &Get, &Set, 0.0f, {}, nullptr, nullptr,
+    nullptr, nullptr, "$Invert Y");
+```
+
+Vanilla's keys are the raw `$...` strings in the interface's own ActionScript:
+`$Invert Y`, `$Look Sensitivity`, `$Difficulty`, `$Brightness`, `$Master` and
+so on. They don't change with the game's language.
+
+Anchors are advisory. Gameplay isn't the same list on SE and AE, and an
+interface replacer can drop a row entirely, so an anchor the tab doesn't carry
+puts your row back at the end rather than failing. Several rows on one anchor
+stack under it in registration order; between two mods that order is their
+plugin load order, which isn't yours to pick.
+
+`SetVanillaSettingAnchor(tab, label, anchor)` does the same thing for a row
+already added, which is how a button gets one.
 
 ### Example
 
