@@ -2,6 +2,7 @@
 
 #include "Config.h"
 #include "Debug.h"
+#include "GFx.h"
 #include "ListRows.h"
 #include "Ordering.h"
 #include "SystemState.h"
@@ -339,122 +340,6 @@ namespace VanillaSettings
             return static_cast<double>(rect.bottom) - 2.0 * top.GetNumber();
         }
 
-        // A Scaleform write costs far more than a read, and these run on
-        // every row of every tick.
-        void SetIfChanged(RE::GFxValue& a_object, const char* a_member, double a_value, double a_epsilon = 0.0001)
-        {
-            RE::GFxValue current;
-            if (a_object.GetMember(a_member, &current) && current.IsNumber() &&
-                std::abs(current.GetNumber() - a_value) <= a_epsilon)
-                return;
-            a_object.SetMember(a_member, RE::GFxValue(a_value));
-        }
-
-        void SetIfChanged(RE::GFxValue& a_object, const char* a_member, bool a_value)
-        {
-            RE::GFxValue current;
-            if (a_object.GetMember(a_member, &current) && current.IsBool() && current.GetBool() == a_value)
-                return;
-            a_object.SetMember(a_member, RE::GFxValue(a_value));
-        }
-
-
-        // BSScrollingList takes its scrollbar from a timeline child named
-        // "scrollbar", which the Settings lists were never given. Attaching
-        // one and filling in ListScrollbar hands the job back to vanilla: it
-        // sizes, moves and hides the bar as it does for its own lists.
-        void EnsureScrollbar(RE::GFxValue& a_list)
-        {
-            RE::GFxValue shownV, maxScrollV, row, rowW, rowH, rowY, rowX;
-            if (!a_list.GetMember("iListItemsShown", &shownV) || !shownV.IsNumber() || shownV.GetNumber() < 1.0 ||
-                !a_list.GetMember("iMaxScrollPosition", &maxScrollV) || !maxScrollV.IsNumber() ||
-                !a_list.GetMember("Entry0", &row) || !row.IsObject() ||
-                !row.GetMember("_x", &rowX) || !rowX.IsNumber() || !row.GetMember("_y", &rowY) || !rowY.IsNumber() ||
-                !row.GetMember("_width", &rowW) || !rowW.IsNumber() ||
-                !row.GetMember("_height", &rowH) || !rowH.IsNumber())
-                return;
-
-            RE::GFxValue bar;
-            if (!a_list.GetMember("ListScrollbar", &bar) || !bar.IsObject()) {
-                // JournalScrollBar, not SettingsScrollbar: despite the name
-                // the latter is the slider inside a settings row, and its
-                // thumb has no scaling grid, so stretching it draws a
-                // spindle. This is what the other lists on this page attach.
-                const RE::GFxValue attach[3] = { RE::GFxValue("JournalScrollBar"),
-                    RE::GFxValue("__nsmf_scrollbar"), RE::GFxValue(22000.0) };
-                if (!a_list.Invoke("attachMovie", &bar, attach, 3) || !bar.IsObject()) {
-                    // A replacer interface may not export it. Leave the list
-                    // as vanilla built it, arrows included.
-                    static bool loggedOnce = false;
-                    if (!loggedOnce) {
-                        loggedOnce = true;
-                        logger::warn("VanillaSettings: no JournalScrollBar in this interface - lists keep their arrows");
-                    }
-                    return;
-                }
-
-                a_list.SetMember("ListScrollbar", bar);
-
-                // What BSScrollingList::onLoad does for the lists that come
-                // with a scrollbar already attached.
-                bar.SetMember("position", RE::GFxValue(0.0));
-                const RE::GFxValue listen[3] = { RE::GFxValue("scroll"), a_list, RE::GFxValue("onScroll") };
-                bar.Invoke("addEventListener", nullptr, listen, 3);
-                logger::debug("VanillaSettings: scrollbar attached");
-            }
-
-            // Only once the bar exists, or a list would lose both.
-            RE::GFxValue up, down;
-            if (a_list.GetMember("ScrollUp", &up) && up.IsObject())
-                SetIfChanged(up, "_visible", false);
-            if (a_list.GetMember("ScrollDown", &down) && down.IsObject())
-                SetIfChanged(down, "_visible", false);
-
-            // Only InvalidateData calls SetScrollbarVisibility, and it ran
-            // before this bar existed - so the list would never hide it.
-            SetIfChanged(bar, "_visible", maxScrollV.GetNumber() > 0.0);
-            if (maxScrollV.GetNumber() > 0.0) {
-                // Re-applied every tick: a UIComponent reports no usable width
-                // until the frame after attachMovie.
-                RE::GFxValue barW;
-                if (bar.GetMember("_width", &barW) && barW.IsNumber() && barW.GetNumber() > 0.0) {
-                    // The border frames the list at a fixed width; a row's own
-                    // is its content's, so it shifts with the label.
-                    double     edge = rowW.GetNumber();
-                    RE::GFxValue border, borderW;
-                    if (a_list.GetMember("border", &border) && border.IsObject() &&
-                        border.GetMember("_width", &borderW) && borderW.IsNumber() && borderW.GetNumber() > 0.0)
-                        edge = borderW.GetNumber();
-
-                    SetIfChanged(bar, "_x", rowX.GetNumber() + edge, 0.5);
-                    SetIfChanged(bar, "_y", rowY.GetNumber(), 0.5);
-
-                    // setSize, not _height, which would stretch the arrows too.
-                    RE::GFxValue sizedH;
-                    const auto   height = rowH.GetNumber() * shownV.GetNumber();
-                    if (!bar.GetMember("__height", &sizedH) || !sizedH.IsNumber() ||
-                        std::abs(sizedH.GetNumber() - height) > 0.5) {
-                        const RE::GFxValue size[2] = { barW, RE::GFxValue(height) };
-                        bar.Invoke("setSize", nullptr, size, 2);
-                    }
-                }
-
-                // pageSize is rows on screen, not iMaxItemsShown, which counts
-                // clips - more are created than fit, and the thumb would come out
-                // sized as if nothing scrolled. Read before writing:
-                // setScrollProperties redraws the thumb on every call.
-                RE::GFxValue pageSize, maxPosition;
-                if (!bar.GetMember("pageSize", &pageSize) || !pageSize.IsNumber() ||
-                    !bar.GetMember("maxPosition", &maxPosition) || !maxPosition.IsNumber() ||
-                    pageSize.GetNumber() != shownV.GetNumber() || maxPosition.GetNumber() != maxScrollV.GetNumber()) {
-                    const RE::GFxValue props[3] = { shownV, RE::GFxValue(0.0), maxScrollV };
-                    bar.Invoke("setScrollProperties", nullptr, props, 3);
-                }
-            }
-
-            Debug::LogScrollbarGeometry(a_list, bar, row);
-        }
-
         // The label is resolved before the value is glued on - the two
         // joined together match no key.
         std::string FormatLabel(const Setting& a_setting, float a_value)
@@ -768,7 +653,7 @@ namespace VanillaSettings
         void SyncRowValue(RE::GFxValue& a_clip, const Setting& a_setting)
         {
             if (a_setting.getValue && a_setting.type != Type::kButton)
-                SetIfChanged(a_clip, "value", static_cast<double>(a_setting.getValue()));
+                GFx::SetIfChanged(a_clip, "value", static_cast<double>(a_setting.getValue()));
         }
 
         // Bounds come from the widget's own dataProvider, so at-limit arrows
@@ -790,9 +675,9 @@ namespace VanillaSettings
             const auto   count = static_cast<std::int64_t>(dataProvider.GetArraySize());
             RE::GFxValue prevBtn, nextBtn;
             if (stepper.GetMember("prevBtn", &prevBtn) && prevBtn.IsObject())
-                SetIfChanged(prevBtn, "_visible", current > 0);
+                GFx::SetIfChanged(prevBtn, "_visible", current > 0);
             if (stepper.GetMember("nextBtn", &nextBtn) && nextBtn.IsObject())
-                SetIfChanged(nextBtn, "_visible", current < count - 1);
+                GFx::SetIfChanged(nextBtn, "_visible", current < count - 1);
         }
 
         // Label rows bind no widget, so the whole row is theirs; every other
@@ -848,7 +733,7 @@ namespace VanillaSettings
             // The two colours BSScrollingList::SetEntryText itself uses.
             RE::GFxValue textField;
             if (a_clip.GetMember("textField", &textField) && textField.IsObject())
-                SetIfChanged(textField, "textColor", enabled ? 0xFFFFFF : 0x606060, 0.5);
+                GFx::SetIfChanged(textField, "textColor", enabled ? 0xFFFFFF : 0x606060, 0.5);
 
             // Dimmed with _alpha, not CLIK's "disabled": that one calls
             // gotoAndPlay, and ScrollBar only repositions its thumb when
@@ -863,7 +748,7 @@ namespace VanillaSettings
             RE::GFxValue widget, selected;
             if (a_clip.GetMember(widgetField, &widget) && widget.IsObject() &&
                 a_clip.GetMember("selected", &selected) && selected.IsBool())
-                SetIfChanged(widget, "_alpha", enabled && selected.GetBool() ? 100.0 : 30.0, 0.5);
+                GFx::SetIfChanged(widget, "_alpha", enabled && selected.GetBool() ? 100.0 : 30.0, 0.5);
         }
 
         void RefreshRowText(RE::GFxValue& a_clip, Setting& a_setting)
@@ -891,7 +776,7 @@ namespace VanillaSettings
                 const bool holding = a_setting.flashTicks > 0;
                 if (holding)
                     --a_setting.flashTicks;
-                SetIfChanged(a_clip, "value", holding ? 1.0 : 0.0);
+                GFx::SetIfChanged(a_clip, "value", holding ? 1.0 : 0.0);
                 break;
             }
 
@@ -1403,7 +1288,7 @@ namespace VanillaSettings
             list.Invoke("CalculateMaxScrollPosition");
             list.Invoke("UpdateList");
 
-            EnsureScrollbar(list);
+            ListRows::EnsureScrollbar(list);
 
             RE::GFxValue scope, fn;
             a_view->CreateObject(&scope);
@@ -1467,7 +1352,7 @@ namespace VanillaSettings
             RE::GFxValue panel, tabList;
             if (a_systemPage.GetMember("SettingsPanel", &panel) && panel.IsObject() &&
                 panel.GetMember("List_mc", &tabList) && tabList.IsObject()) {
-                EnsureScrollbar(tabList);
+                ListRows::EnsureScrollbar(tabList);
                 RefreshDescription(tabList, true);
             }
         }
@@ -1504,7 +1389,7 @@ namespace VanillaSettings
                 loggedOptionsList = true;
                 Debug::LogMembers(list, "OptionsList");
             }
-            EnsureScrollbar(list);
+            ListRows::EnsureScrollbar(list);
         }
 
         if (g_pendingCommits > 0)
@@ -1671,7 +1556,7 @@ namespace VanillaSettings
 
         ListRows::Ensure(list, static_cast<std::uint32_t>(g_scopedTabs.size()), "SettingsList(own)");
         list.Invoke("InvalidateData");
-        EnsureScrollbar(list);
+        ListRows::EnsureScrollbar(list);
 
         // What vanilla's own Settings entry does, and all it does.
         RE::GFxValue state(SystemState::Read(a_view, "SETTINGS_CATEGORY_STATE", 3.0));

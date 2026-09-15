@@ -12,4 +12,7 @@ namespace ListRows
     // a_setup runs on every clip created.
     void Ensure(RE::GFxValue& a_list, std::uint32_t a_needed, const char* a_tag,
         const std::function<void(RE::GFxValue&)>& a_setup = {});
+
+    // Attaches JournalScrollBar to a list that shipped with only arrows.
+    void EnsureScrollbar(RE::GFxValue& a_list);
 }

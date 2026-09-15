@@ -1,5 +1,10 @@
 #include "ListRows.h"
 
+#include "Debug.h"
+#include "GFx.h"
+
+#include <cmath>
+
 namespace ListRows
 {
     namespace
@@ -90,5 +95,96 @@ namespace ListRows
         }
 
         a_list.SetMember("iMaxItemsShown", RE::GFxValue(static_cast<double>(a_needed)));
+    }
+
+    // Filling in ListScrollbar hands sizing, moving and hiding back to
+    // BSScrollingList, as for the lists that ship with one.
+    void EnsureScrollbar(RE::GFxValue& a_list)
+    {
+        RE::GFxValue shownV, maxScrollV, row, rowW, rowH, rowY, rowX;
+        if (!a_list.GetMember("iListItemsShown", &shownV) || !shownV.IsNumber() || shownV.GetNumber() < 1.0 ||
+            !a_list.GetMember("iMaxScrollPosition", &maxScrollV) || !maxScrollV.IsNumber() ||
+            !a_list.GetMember("Entry0", &row) || !row.IsObject() ||
+            !row.GetMember("_x", &rowX) || !rowX.IsNumber() || !row.GetMember("_y", &rowY) || !rowY.IsNumber() ||
+            !row.GetMember("_width", &rowW) || !rowW.IsNumber() ||
+            !row.GetMember("_height", &rowH) || !rowH.IsNumber())
+            return;
+
+        RE::GFxValue bar;
+        if (!a_list.GetMember("ListScrollbar", &bar) || !bar.IsObject()) {
+            // Not SettingsScrollbar: that one is the slider inside a row,
+            // and its thumb has no scaling grid.
+            const RE::GFxValue attach[3] = { RE::GFxValue("JournalScrollBar"),
+                RE::GFxValue("__nsmf_scrollbar"), RE::GFxValue(22000.0) };
+            if (!a_list.Invoke("attachMovie", &bar, attach, 3) || !bar.IsObject()) {
+                // A replacer interface may not export it.
+                static bool loggedOnce = false;
+                if (!loggedOnce) {
+                    loggedOnce = true;
+                    logger::warn("ListRows: no JournalScrollBar in this interface - lists keep their arrows");
+                }
+                return;
+            }
+
+            a_list.SetMember("ListScrollbar", bar);
+
+            // What BSScrollingList::onLoad does for the lists that come
+            // with a scrollbar already attached.
+            bar.SetMember("position", RE::GFxValue(0.0));
+            const RE::GFxValue listen[3] = { RE::GFxValue("scroll"), a_list, RE::GFxValue("onScroll") };
+            bar.Invoke("addEventListener", nullptr, listen, 3);
+            logger::debug("ListRows: scrollbar attached");
+        }
+
+        // Only once the bar exists, or a list would lose both.
+        RE::GFxValue up, down;
+        if (a_list.GetMember("ScrollUp", &up) && up.IsObject())
+            GFx::SetIfChanged(up, "_visible", false);
+        if (a_list.GetMember("ScrollDown", &down) && down.IsObject())
+            GFx::SetIfChanged(down, "_visible", false);
+
+        // Only InvalidateData calls SetScrollbarVisibility, and it ran
+        // before this bar existed.
+        GFx::SetIfChanged(bar, "_visible", maxScrollV.GetNumber() > 0.0);
+        if (maxScrollV.GetNumber() > 0.0) {
+            // A UIComponent reports no usable width until the frame after
+            // attachMovie.
+            RE::GFxValue barW;
+            if (bar.GetMember("_width", &barW) && barW.IsNumber() && barW.GetNumber() > 0.0) {
+                // The border frames the list at a fixed width; a row's own
+                // is its content's, so it shifts with the label.
+                double     edge = rowW.GetNumber();
+                RE::GFxValue border, borderW;
+                if (a_list.GetMember("border", &border) && border.IsObject() &&
+                    border.GetMember("_width", &borderW) && borderW.IsNumber() && borderW.GetNumber() > 0.0)
+                    edge = borderW.GetNumber();
+
+                GFx::SetIfChanged(bar, "_x", rowX.GetNumber() + edge, 0.5);
+                GFx::SetIfChanged(bar, "_y", rowY.GetNumber(), 0.5);
+
+                // setSize, not _height, which would stretch the arrows too.
+                RE::GFxValue sizedH;
+                const auto   height = rowH.GetNumber() * shownV.GetNumber();
+                if (!bar.GetMember("__height", &sizedH) || !sizedH.IsNumber() ||
+                    std::abs(sizedH.GetNumber() - height) > 0.5) {
+                    const RE::GFxValue size[2] = { barW, RE::GFxValue(height) };
+                    bar.Invoke("setSize", nullptr, size, 2);
+                }
+            }
+
+            // pageSize is rows on screen, not iMaxItemsShown, which counts
+            // clips - more are created than fit, and the thumb would come out
+            // sized as if nothing scrolled. Read before writing:
+            // setScrollProperties redraws the thumb on every call.
+            RE::GFxValue pageSize, maxPosition;
+            if (!bar.GetMember("pageSize", &pageSize) || !pageSize.IsNumber() ||
+                !bar.GetMember("maxPosition", &maxPosition) || !maxPosition.IsNumber() ||
+                pageSize.GetNumber() != shownV.GetNumber() || maxPosition.GetNumber() != maxScrollV.GetNumber()) {
+                const RE::GFxValue props[3] = { shownV, RE::GFxValue(0.0), maxScrollV };
+                bar.Invoke("setScrollProperties", nullptr, props, 3);
+            }
+        }
+
+        Debug::LogScrollbarGeometry(a_list, bar, row);
     }
 }

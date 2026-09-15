@@ -1,6 +1,7 @@
 #include "NativeMenu.h"
 
 #include "Config.h"
+#include "Controls.h"
 #include "ListRows.h"
 #include "Ordering.h"
 #include "Pages.h"
@@ -481,6 +482,7 @@ namespace NativeMenu
             }
 
             HookDelegate(a_this->fxDelegate.get());
+            Controls::Tick(systemPage);
             VanillaSettings::Tick(a_this, view, systemPage);
 
             const int pending = g_pendingEntry.exchange(-1);

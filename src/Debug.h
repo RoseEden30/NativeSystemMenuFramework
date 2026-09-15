@@ -8,6 +8,8 @@ namespace Debug
 
     void LogMembers(RE::GFxValue& a_value, const char* a_tag);
     void LogVanillaEntries(RE::GFxValue& a_list, const std::string& a_tab);
+    // The Controls list, once it has been populated.
+    void LogInputMappings(RE::GFxValue& a_page);
     // The Help panel, which is the screen a mod page is built on.
     void LogHelpPanel(RE::GFxValue& a_page);
 

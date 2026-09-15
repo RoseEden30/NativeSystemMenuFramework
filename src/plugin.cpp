@@ -1,4 +1,5 @@
 #include "Config.h"
+#include "Controls.h"
 #include "Translations.h"
 #include "Debug.h"
 #include "Logging.h"
@@ -90,6 +91,11 @@ namespace
             // entries existing - injection no-ops until one is.
             NativeMenu::InstallHooks();
             RegisterOwnSettings();
+            break;
+
+        case SKSE::MessagingInterface::kDataLoaded:
+            // The ControlMap is filled from controlmap.txt before this point.
+            Controls::Apply();
             break;
 
         default:

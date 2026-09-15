@@ -304,6 +304,48 @@ namespace NativeSystemMenuFramework
         return func ? func(a_tab, a_description) : false;
     }
 
+    // Only Gameplay has rows the Controls screen shows on its own.
+    enum class ControlContext
+    {
+        kGameplay = 0,
+        kMenu,
+        kInventory,
+        kFavorites,
+        kMap,
+        kStats,
+        kBook,
+        kJournal,
+        kLockpicking,
+    };
+
+    // Runs on the game's input thread when the control fires. Keep it cheap.
+    using ControlPress = void(__stdcall*)();
+
+    using AddVanillaControlFunction = bool (*)(const char* event, int context, const char* label, int defaultKey,
+        int defaultGamepad, ControlPress onPress, const char* description, const char* owner);
+
+    // Puts a row on the Controls screen, remapped by the game itself.
+    //
+    // a_event is the engine's action name, the first field of a controlmap.txt
+    // line - never translated, never shown. An action already in a_context is
+    // surfaced, so "Hotkey1" shows the row Bethesda ships hidden; one the game
+    // doesn't know is created from the defaults, scan codes or -1 for unbound.
+    //
+    // a_label is what the row reads, for actions the game has no wording for;
+    // null keeps vanilla's. a_onPress is only for your own actions.
+    //
+    // Returns false if the framework isn't installed or a_event is empty.
+    inline bool AddVanillaControl(const char* a_event, ControlContext a_context = ControlContext::kGameplay,
+        const char* a_label = nullptr, int a_defaultKey = -1, int a_defaultGamepad = -1,
+        ControlPress a_onPress = nullptr, const char* a_description = nullptr)
+    {
+        static AddVanillaControlFunction cache = nullptr;
+        const auto func = Internal::GetFunction(cache, "AddVanillaControl");
+        return func ? func(a_event, static_cast<int>(a_context), a_label, a_defaultKey, a_defaultGamepad, a_onPress,
+                          a_description, Internal::Owner().c_str())
+                    : false;
+    }
+
     using GetIniSettingFunction = float (*)(const char* name);
 
     // A real engine ini setting, e.g. "fDefaultWorldFOV:Display" - whichever

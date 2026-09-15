@@ -79,6 +79,7 @@ namespace Debug
     // What vanilla's own rows carry, so a description can be keyed to
     // something stable rather than to their translated label.
     std::vector<std::string> g_dumpedTabs;
+    bool                     g_dumpedMappings = false;
     // Only logged when it changes, per list: two of them refresh every tick.
     std::unordered_map<std::string, std::string> g_lastScrollbarLine;
 
@@ -137,6 +138,39 @@ namespace Debug
                 choices.empty() ? "" : " - options: " + choices);
         }
     }
+
+    void LogInputMappings(RE::GFxValue& a_page)
+    {
+        if (g_dumpedMappings)
+            return;
+
+        RE::GFxValue panel, list, entries;
+        if (!a_page.GetMember("InputMappingPanel", &panel) || !panel.IsObject() ||
+            !panel.GetMember("List_mc", &list) || !list.IsObject() ||
+            !list.GetMember("EntriesA", &entries) || !entries.IsArray() || entries.GetArraySize() == 0)
+            return;
+        g_dumpedMappings = true;
+
+        LogMembers(list, "MappingList");
+        for (std::uint32_t i = 0; i < entries.GetArraySize(); ++i) {
+            RE::GFxValue entry, text, sortIndex;
+            if (!entries.GetElement(i, &entry) || !entry.IsObject())
+                continue;
+            if (i == 0) {
+                LogMembers(entry, "MappingEntry0");
+                RE::GFxValue clip;
+                if (list.GetMember("Entry0", &clip) && clip.IsObject())
+                    LogMembers(clip, "MappingClip0");
+            }
+
+            entry.GetMember("text", &text);
+            entry.GetMember("sortIndex", &sortIndex);
+            logger::debug("Debug: Controls[{}] '{}' sortIndex={:.0f}", i,
+                text.IsString() ? text.GetString() : "?",
+                sortIndex.IsNumber() ? sortIndex.GetNumber() : -1.0);
+        }
+    }
+
     // The numbers behind the scrollbar, whenever any of them moves - the only
     // way to tell an initialisation lag from a bad measurement.
     void LogScrollbarGeometry(RE::GFxValue& a_list, RE::GFxValue& a_bar, RE::GFxValue& a_row)
@@ -216,6 +250,7 @@ namespace Debug
     void Reset()
     {
         g_dumpedTabs.clear();
+        g_dumpedMappings = false;
         g_lastScrollbarLine.clear();
     }
 }

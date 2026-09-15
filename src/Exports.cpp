@@ -1,3 +1,4 @@
+#include "Controls.h"
 #include "IniSettings.h"
 #include "NativeMenu.h"
 #include "Pages.h"
@@ -60,6 +61,15 @@ extern "C" __declspec(dllexport) bool __cdecl AddVanillaButton(
 {
     return VanillaSettings::AddButton(
         a_tab ? a_tab : "", a_label ? a_label : "", a_onPress, a_owner ? a_owner : "");
+}
+
+extern "C" __declspec(dllexport) bool __cdecl AddVanillaControl(const char* a_event, int a_context,
+    const char* a_label, int a_defaultKey, int a_defaultGamepad, void(__stdcall* a_onPress)(),
+    const char* a_description, const char* a_owner)
+{
+    return Controls::Add(a_event ? a_event : "", static_cast<Controls::Context>(a_context),
+        a_label ? a_label : "", a_defaultKey, a_defaultGamepad, a_onPress, a_description ? a_description : "",
+        a_owner ? a_owner : "");
 }
 
 extern "C" __declspec(dllexport) bool __cdecl SetVanillaSettingAnchor(
