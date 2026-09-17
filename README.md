@@ -38,7 +38,7 @@ which only appear with `[Debug] Verbose` on.
 copying `SKSE/` and `Interface/` into your Data folder. Mods that use it pick
 it up on their own.
 
-It improves the game's own Settings screen even with no mod using it:
+It improves the game's own System menu even with no mod using it:
 
 - **Descriptions on Skyrim's own rows.** Every Gameplay, Display and Audio
   setting gets a line explaining what it actually does - Save on Pause sets the
@@ -82,13 +82,13 @@ Call `Register` from your SKSE listener at `kPostPostLoad`, not from
 `SKSEPluginLoad`.
 
 [docs/API.md](docs/API.md) has the rest - why that timing, widget types, tabs,
-units, descriptions, and the reset-to-defaults hook.
+units, descriptions, keys, and the reset-to-defaults hook.
 
 ## What it does for you
 
 Rows are real vanilla widgets, not lookalikes, driven through the same
-dispatch Skyrim uses for its own. The rest is what the Settings screen lacks
-once it grows past what Bethesda designed it for:
+dispatch Skyrim uses for its own. The rest is what the menu lacks once it
+grows past what Bethesda designed it for:
 
 - **Scrolling** - the Settings and Controls lists ship with a pair of arrows
   and no bar. The framework attaches the interface's own `JournalScrollBar`,
@@ -106,11 +106,11 @@ once it grows past what Bethesda designed it for:
   them, and the groups are ordered by mod name rather than by plugin load
   order.
 - **Keys** - a row on the Controls screen, remapped by the game itself, with
-  the conflict check and the reset to defaults that come with it. The key is
-  kept in the framework's ini rather than the game's, which is indexed rather
-  than named and would shift the player's other bindings.
-- **Pages** - a third shape besides settings and tabs: a list of items, each
-  opening a panel of text, for anything a player reads rather than sets.
+  its conflict check and reset to defaults. The key is kept in the
+  framework's ini, since the game's own file is indexed rather than named and
+  would shift the player's other bindings once a mod is gone.
+- **Pages** - a list of items, each opening a panel of text, for anything a
+  player reads rather than sets.
 - **Hiding** - the player can hide System menu entries, vanilla ones included,
   from the framework's own tab. Stored by name, so a replaced interface or a
   version without the Creations entry changes nothing.

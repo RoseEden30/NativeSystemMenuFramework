@@ -229,7 +229,7 @@ bool AddVanillaSetting(const char* tab, SettingType type, const char* label,
     SettingGetter getValue, SettingSetter onChange, float defaultValue,
     const std::vector<std::string>& options = {}, SettingIsEnabled isEnabled = nullptr,
     SettingFormatValue formatValue = nullptr, const char* description = nullptr,
-    SettingCommit onCommit = nullptr);
+    SettingCommit onCommit = nullptr, const char* placeAfter = nullptr);
 ```
 
 Adds a real ScrollBar/OptionStepper/CheckBox row - the same widgets Bethesda
@@ -472,9 +472,13 @@ that file puts it, not yours to alter for vanilla actions.
 Two cases, same call:
 
 **The game already has this action.** It is simply surfaced. Bethesda ships a
-number of them bound but hidden - the eight `Hotkey1`..`Hotkey8`, `Zoom In`
-and `Zoom Out`, and on a gamepad most of the movement row. The defaults are
-ignored, the action keeps whatever `controlmap.txt` gave it.
+few bound but hidden: `Hotkey1` to `Hotkey8`, `Zoom In` and `Zoom Out`. The
+defaults are ignored, the action keeps whatever `controlmap.txt` gave it.
+
+An action vanilla binds on the keyboard or the mouse alone also gets an unbound
+entry on the other, the way Left Attack has one - otherwise the game refuses a
+remap to that device. It adds no row: the zoom still reads `???`, the mouse
+wheel having no name on that screen, and now takes a keyboard key as well.
 
 ```cpp
 AddVanillaControl("Hotkey1", ControlContext::kGameplay, "$MYMOD_HOTKEY_1");
@@ -499,15 +503,19 @@ Leave it null to keep vanilla's own text.
 **`onPress`** - runs on the game's input thread, once per press, only for
 actions you created. The game already dispatches its own.
 
-**Where the keys are kept.** The game's own `ControlMap_Custom.txt` is indexed
-rather than named, so an action it won't know about next launch can't go in
-it - it would shift the player's other bindings. The framework keeps those
-keys in its own ini instead, and only the ones the player actually changed, so
-a different `controlmap.txt` still brings its own defaults.
+**`description`** - reserved. The Controls screen has no description line, so
+nothing shows it yet.
 
-**`context`** - which of the game's input contexts the action belongs to.
-Only `kGameplay` rows appear on the Controls screen; the others exist but the
-game does not list them.
+**`context`** - leave it at `kGameplay`. The game builds the Controls screen
+from that context alone, so a row in any other never appears.
+
+**Where the keys are kept.** The game's own `ControlMap_Custom.txt` is indexed
+rather than named, and it drops keys set on rows it ships locked. The
+framework keeps the keys of every row it put on the screen in its own ini
+instead, and only the ones the player changed, so a different
+`controlmap.txt` still brings its own defaults. Actions and entries the game
+won't have next launch are kept out of its file, so uninstalling a mod never
+shifts the player's other bindings.
 
 ## `SetVanillaTabDescription`
 
