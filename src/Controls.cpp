@@ -57,6 +57,7 @@ namespace Controls
             return controls ? controls->controlMap[Resolve(a_context)] : nullptr;
         }
 
+        bool                         g_applied = false;
         bool                         g_hooked = false;
         RE::FxDelegate::CallbackDefn g_originalReset{};
         RE::FxDelegate::CallbackDefn g_originalSave{};
@@ -243,12 +244,18 @@ namespace Controls
                     if (!button || !button->IsDown())
                         continue;
 
-                    const std::lock_guard lock(g_mutex);
-                    const std::string_view fired(button->QUserEvent().c_str());
-                    for (const auto& row : g_rows) {
-                        if (row.onPress && row.event == fired)
-                            row.onPress();
+                    std::vector<std::function<void()>> presses;
+                    {
+                        const std::lock_guard lock(g_mutex);
+                        const std::string_view fired(button->QUserEvent().c_str());
+                        for (const auto& row : g_rows) {
+                            if (row.onPress && row.event == fired)
+                                presses.push_back(row.onPress);
+                        }
                     }
+                    // Unlocked: the callback may register a control.
+                    for (const auto& press : presses)
+                        press();
                 }
                 return RE::BSEventNotifyControl::kContinue;
             }
@@ -302,6 +309,8 @@ namespace Controls
 
         if (a_event.empty())
             return false;
+        if (g_applied)
+            logger::warn("Controls: '{}' registered after data load - it shows once controls are reset", a_event);
 
         Translations::Load(a_owner);
         g_rows.push_back({ std::move(a_event), a_context, std::move(a_label), a_defaultKey, a_defaultGamepad,
@@ -313,6 +322,7 @@ namespace Controls
     {
         const std::lock_guard lock(g_mutex);
 
+        g_applied = true;
         const auto saved = Config::GetControlKeys();
 
         int shown = 0;

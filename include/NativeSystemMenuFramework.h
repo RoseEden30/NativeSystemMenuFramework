@@ -333,6 +333,7 @@ namespace NativeSystemMenuFramework
     //
     // a_label is what the row reads, for actions the game has no wording for;
     // null keeps vanilla's. a_onPress is only for your own actions.
+    // a_description is reserved. Register at kPostPostLoad.
     //
     // Returns false if the framework isn't installed or a_event is empty.
     inline bool AddVanillaControl(const char* a_event, ControlContext a_context = ControlContext::kGameplay,
