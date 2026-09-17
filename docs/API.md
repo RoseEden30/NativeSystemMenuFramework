@@ -477,8 +477,8 @@ defaults are ignored, the action keeps whatever `controlmap.txt` gave it.
 
 An action vanilla binds on the keyboard or the mouse alone also gets an unbound
 entry on the other, the way Left Attack has one - otherwise the game refuses a
-remap to that device. It adds no row: the zoom still reads `???`, the mouse
-wheel having no name on that screen, and now takes a keyboard key as well.
+remap to that device. It adds no row: the zoom still reads `???`, since the
+interface has no icon for the mouse wheel, and now takes a keyboard key as well.
 
 ```cpp
 AddVanillaControl("Hotkey1", ControlContext::kGameplay, "$MYMOD_HOTKEY_1");

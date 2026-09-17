@@ -158,7 +158,7 @@ namespace Debug
 
         LogMembers(list, "MappingList");
         for (std::uint32_t i = 0; i < entries.GetArraySize(); ++i) {
-            RE::GFxValue entry, text, sortIndex;
+            RE::GFxValue entry, text, sortIndex, buttonName, buttonID;
             if (!entries.GetElement(i, &entry) || !entry.IsObject())
                 continue;
             if (i == 0) {
@@ -170,9 +170,13 @@ namespace Debug
 
             entry.GetMember("text", &text);
             entry.GetMember("sortIndex", &sortIndex);
-            logger::debug("Debug: Controls[{}] '{}' sortIndex={:.0f}", i,
+            entry.GetMember("buttonName", &buttonName);
+            entry.GetMember("buttonID", &buttonID);
+            logger::debug("Debug: Controls[{}] '{}' sortIndex={:.0f} button='{}' id={:.0f}", i,
                 text.IsString() ? text.GetString() : "?",
-                sortIndex.IsNumber() ? sortIndex.GetNumber() : -1.0);
+                sortIndex.IsNumber() ? sortIndex.GetNumber() : -1.0,
+                buttonName.IsString() ? buttonName.GetString() : "?",
+                buttonID.IsNumber() ? buttonID.GetNumber() : -1.0);
         }
     }
 
