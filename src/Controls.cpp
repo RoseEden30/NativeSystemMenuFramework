@@ -23,6 +23,7 @@ namespace Controls
             std::string           description;
             std::string           owner;
             bool                  created = false;
+            bool                  filled = false;
         };
 
         std::recursive_mutex g_mutex;
@@ -30,7 +31,7 @@ namespace Controls
 
         std::unordered_map<std::string, std::string> g_labels;
 
-        // Only what the player actually changed gets written down.
+        // Defaults as first seen, so only real changes get written down.
         std::unordered_map<std::string, int> g_defaults;
 
         using ContextID = RE::UserEvents::INPUT_CONTEXT_ID;
@@ -65,33 +66,6 @@ namespace Controls
             return std::string(a_event) + "|" + std::to_string(a_device);
         }
 
-        // Some actions carry a second key, and unlocking both lists the row twice.
-        bool Surface(RE::ControlMap::InputContext& a_context, std::string_view a_event,
-            const std::unordered_map<std::string, int>& a_saved)
-        {
-            bool found = false;
-            for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad; ++device) {
-                bool first = true;
-                for (auto& mapping : a_context.deviceMappings[device]) {
-                    if (std::string_view(mapping.eventID.c_str()) != a_event)
-                        continue;
-                    found = true;
-                    if (!first)
-                        continue;
-                    first = false;
-                    mapping.remappable = true;
-
-                    const auto name = KeyName(a_event, device);
-                    g_defaults[name] = mapping.inputKey;
-
-                    const auto saved = a_saved.find(name);
-                    if (saved != a_saved.end() && saved->second >= 0)
-                        mapping.inputKey = static_cast<std::uint16_t>(saved->second);
-                }
-            }
-            return found;
-        }
-
         // Rows sort by this, so a new action lands after the game's own.
         std::int8_t NextIndex(RE::ControlMap::InputContext& a_context)
         {
@@ -103,43 +77,93 @@ namespace Controls
             return static_cast<std::int8_t>(next < 127 ? next + 1 : 127);
         }
 
-        bool Create(RE::ControlMap::InputContext& a_context, const Row& a_row,
-            const std::unordered_map<std::string, int>& a_saved)
+        int DefaultFor(const Row& a_row, std::size_t a_device)
         {
-            const auto index = NextIndex(a_context);
+            switch (a_device) {
+            case RE::INPUT_DEVICES::kKeyboard: return a_row.defaultKey;
+            case RE::INPUT_DEVICES::kGamepad:  return a_row.defaultGamepad;
+            default:                           return -1;
+            }
+        }
 
-            bool       added = false;
-            const auto push = [&](std::size_t a_device, int a_default) {
-                if (a_default < 0)
-                    return;
+        RE::ControlMap::UserEventMapping* FirstMapping(
+            RE::ControlMap::InputContext& a_context, std::size_t a_device, std::string_view a_event)
+        {
+            // A second key on the same device would list the row twice.
+            for (auto& mapping : a_context.deviceMappings[a_device]) {
+                if (std::string_view(mapping.eventID.c_str()) == a_event)
+                    return &mapping;
+            }
+            return nullptr;
+        }
 
-                const auto name = KeyName(a_row.event, a_device);
-                g_defaults[name] = a_default;
+        constexpr int kUnbound = RE::ControlMap::kInvalid;
 
+        // Like vanilla's Left Attack: an unbound entry on the missing device
+        // lets a remap land there, and adds no row.
+        int FallbackFor(RE::ControlMap::InputContext& a_context, const Row& a_row, std::size_t a_device, bool a_created)
+        {
+            if (a_created)
+                return DefaultFor(a_row, a_device);
+            if (a_device == RE::INPUT_DEVICES::kGamepad)
+                return -1;
+
+            const auto partner = a_device == RE::INPUT_DEVICES::kKeyboard ? RE::INPUT_DEVICES::kMouse
+                                                                         : RE::INPUT_DEVICES::kKeyboard;
+            return FirstMapping(a_context, partner, a_row.event) ? kUnbound : -1;
+        }
+
+        bool Surface(RE::ControlMap::InputContext& a_context, const Row& a_row,
+            const std::unordered_map<std::string, int>& a_saved, bool& a_created, bool& a_filled)
+        {
+            // One action, one index, or the screen lists it twice.
+            std::int8_t index = -1;
+            for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad && index < 0; ++device) {
+                if (const auto* known = FirstMapping(a_context, device, a_row.event))
+                    index = known->indexInContext;
+            }
+
+            a_created = index < 0;
+            if (a_created)
+                index = NextIndex(a_context);
+
+            bool shown = false;
+            for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad; ++device) {
+                const auto name = KeyName(a_row.event, device);
                 const auto saved = a_saved.find(name);
-                const auto key = saved != a_saved.end() && saved->second >= 0 ? saved->second : a_default;
+                const auto wanted = saved != a_saved.end() && saved->second >= 0 ? saved->second : -1;
+
+                if (auto* mapping = FirstMapping(a_context, device, a_row.event)) {
+                    const auto original = g_defaults.try_emplace(name, mapping->inputKey).first->second;
+                    mapping->remappable = true;
+                    mapping->inputKey = static_cast<std::uint16_t>(wanted >= 0 ? wanted : original);
+                    shown = true;
+                    continue;
+                }
+
+                const auto fallback = FallbackFor(a_context, a_row, device, a_created);
+                if (fallback < 0)
+                    continue;
+                g_defaults.try_emplace(name, fallback);
+                a_filled = a_filled || !a_created;
 
                 RE::ControlMap::UserEventMapping mapping{};
                 mapping.eventID = a_row.event.c_str();
-                mapping.inputKey = static_cast<std::uint16_t>(key);
+                mapping.inputKey = static_cast<std::uint16_t>(wanted >= 0 ? wanted : fallback);
                 mapping.indexInContext = index;
                 mapping.remappable = true;
-
-                a_context.deviceMappings[a_device].push_back(mapping);
-                added = true;
-            };
-
-            push(RE::INPUT_DEVICES::kKeyboard, a_row.defaultKey);
-            push(RE::INPUT_DEVICES::kGamepad, a_row.defaultGamepad);
-            return added;
+                a_context.deviceMappings[device].push_back(mapping);
+                shown = true;
+            }
+            return shown;
         }
 
-        // The game's file is indexed, not named, and it only writes what it
-        // considers remappable.
-        void HideCreated(bool a_hide)
+        // Keeps entries the game won't have next launch out of its indexed
+        // file, which only takes what is remappable.
+        void HideAdded(bool a_hide)
         {
             for (const auto& row : g_rows) {
-                if (!row.created)
+                if (!row.created && !row.filled)
                     continue;
 
                 auto* context = ContextFor(row.context);
@@ -147,9 +171,14 @@ namespace Controls
                     continue;
 
                 for (std::size_t device = 0; device <= RE::INPUT_DEVICES::kGamepad; ++device) {
+                    if (!a_hide) {
+                        if (auto* mapping = FirstMapping(*context, device, row.event))
+                            mapping->remappable = true;
+                        continue;
+                    }
                     for (auto& mapping : context->deviceMappings[device]) {
                         if (std::string_view(mapping.eventID.c_str()) == row.event)
-                            mapping.remappable = !a_hide;
+                            mapping.remappable = false;
                     }
                 }
             }
@@ -193,14 +222,13 @@ namespace Controls
             Config::SaveControlKeys(keys);
             logger::debug("Controls: saved {} key(s)", keys.size());
 
-            HideCreated(true);
+            HideAdded(true);
             if (g_originalSave.callback)
                 g_originalSave.callback(a_params);
-            HideCreated(false);
+            HideAdded(false);
         }
 
-        // Nothing dispatches an action the game doesn't own. QUserEvent
-        // resolves through the ControlMap, so the context is accounted for.
+        // The game dispatches nothing for actions it doesn't own.
         class InputSink : public RE::BSTEventSink<RE::InputEvent*>
         {
         public:
@@ -295,12 +323,9 @@ namespace Controls
                 continue;
             }
 
-            if (!Surface(*context, row.event, saved)) {
-                row.created = Create(*context, row, saved);
-                if (!row.created) {
-                    logger::warn("Controls: '{}' is unknown and has no default key", row.event);
-                    continue;
-                }
+            if (!Surface(*context, row, saved, row.created, row.filled)) {
+                logger::warn("Controls: '{}' is unknown and has no default key", row.event);
+                continue;
             }
             ++shown;
             if (!row.label.empty())
